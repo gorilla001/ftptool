@@ -18,5 +18,5 @@ build:
                 sh -c 'go build -v'
 
 image: build
-	docker build --rm --tag ftptool:latest .
+	docker build --rm --tag ftptool:$(shell git rev-parse --short HEAD) .
 
