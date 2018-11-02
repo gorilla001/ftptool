@@ -220,7 +220,13 @@ func loadImage(path string) (string, error) {
 	defer f.Close()
 
 	resp, err := cli.ImageLoad(context.Background(), f, false)
-	defer resp.Body.Close()
+	if err != nil {
+		return "", err
+	}
+
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 
 	bts, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
