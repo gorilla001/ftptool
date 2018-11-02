@@ -413,7 +413,7 @@ func serveHTTP(addr string) {
 			Password: data.Userpwd,
 		}
 
-		if err := Walk(cfg, "/", walkFun); err != nil {
+		if err := Walk(cfg, data.SyncDirectory, walkFun); err != nil {
 			log.Errorf("list files error: %v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
