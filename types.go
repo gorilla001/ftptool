@@ -67,10 +67,11 @@ func (ld *ListRequest) Validate() error {
 }
 
 type ListResponse struct {
-	ImageName       string `json:"imageName"`
-	ImageTag        string `json:"imageTag"`
-	ImageMD5Code    string `json:"imageMD5Code"`
-	ImageSha256Code string `json:"imageSha256Code"`
+	ImageFileDirectory string `json:"imageFileDirectory"`
+	ImageName          string `json:"imageName"`
+	ImageTag           string `json:"imageTag"`
+	ImageMD5Code       string `json:"imageMD5Code"`
+	ImageSha256Code    string `json:"imageSha256Code"`
 }
 
 type TestRequest struct {

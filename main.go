@@ -421,6 +421,7 @@ func serveHTTP(addr string) {
 
 		md5 := map[string]string{}
 		sha256 := map[string]string{}
+		paths := map[string]string{}
 		for _, file := range files {
 			if strings.HasSuffix(file, ".md5") {
 				content, err := readFile(cfg, file)
@@ -431,6 +432,7 @@ func serveHTTP(addr string) {
 
 				last := strings.Split(file, "/")
 				md5[strings.TrimSuffix(last[len(last)-1], ".md5")] = content
+				paths[strings.TrimSuffix(last[len(last)-1], ".md5")] = filepath.Dir(file)
 			}
 			if strings.HasSuffix(file, ".sha256") {
 				content, err := readFile(cfg, file)
@@ -449,10 +451,11 @@ func serveHTTP(addr string) {
 			parts := strings.Split(k, "#")
 			tag := parts[len(parts)-1]
 			r := &ListResponse{
-				ImageName:       strings.TrimSuffix(k, "#"+tag),
-				ImageTag:        tag,
-				ImageMD5Code:    v,
-				ImageSha256Code: sha256[k],
+				ImageFileDirectory: paths[k],
+				ImageName:          strings.TrimSuffix(k, "#"+tag),
+				ImageTag:           tag,
+				ImageMD5Code:       v,
+				ImageSha256Code:    sha256[k],
 			}
 			out = append(out, r)
 		}
