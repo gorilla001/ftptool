@@ -186,7 +186,7 @@ func downloadImage(src *ImageSource, image *ImageItem) (string, error) {
 		Password: src.Userpwd,
 	}
 
-	fname := image.ImageFileName + ".tar.gz"
+	fname := image.ImageFileName + "#" + image.ImageTag + ".tar.gz"
 	path := filepath.Join(image.ImageFileDirectory, fname)
 
 	log.Println("download image", path)
