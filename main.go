@@ -224,10 +224,6 @@ func loadImage(path string) (string, error) {
 		return "", err
 	}
 
-	if resp != nil {
-		defer resp.Body.Close()
-	}
-
 	bts, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
@@ -236,6 +232,7 @@ func loadImage(path string) (string, error) {
 	out := bytes.Trim(bts, "\n")
 	m := map[string]string{}
 	if err := json.Unmarshal(out, &m); err != nil {
+		log.Errorf("unmarshal err: %v", err)
 		return "", err
 	}
 
@@ -564,7 +561,7 @@ func serveHTTP(addr string) {
 				}
 
 				log.Println("push image")
-				if err := pushImage(data.DestImageRepoToken, data.DestImageRepoUsername, im); err != nil {
+				if err := pushImage(data.DestImageRepoUsername, data.DestImageRepoToken, im); err != nil {
 					log.Errorf("push image %s error: %v", path, err)
 
 					out = append(out, &SyncResponse{
