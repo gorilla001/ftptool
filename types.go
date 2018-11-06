@@ -74,6 +74,16 @@ type ListResponse struct {
 	ImageSha256Code    string `json:"imageSha256Code"`
 }
 
+type TestRegistryRequest struct {
+	Repository string `json:"repository"`
+	Username   string `json:"username"`
+	Userpwd    string `json:"userpwd"`
+}
+
+func (tr *TestRegistryRequest) Bind(b io.ReadCloser) error {
+	return json.NewDecoder(b).Decode(tr)
+}
+
 type TestRequest struct {
 	ImageSourceName string `json:"imageSourceName"`
 	ImageSourceType string `json:"imageSourceType"`

@@ -60,6 +60,40 @@ func getClient(config *serverConfig) (*ftp.ServerConn, error) {
 	return client, nil
 }
 
+func registryLoginTest(req *TestRegistryRequest) error {
+	if req.Repository == "" {
+		return errors.New("empty Repository")
+	}
+
+	//host, port, err := net.SplitHostPort(req.Repository)
+	//if err != nil {
+	//	return fmt.Errorf("Invalid Repository %v", err)
+	//}
+
+	//cli, err := client.NewClient(req.Repository, "", nil, nil)
+	cli, err := client.NewEnvClient()
+	if err != nil {
+		log.Errorf("docker NewClient error: %v", err)
+		return err
+	}
+	defer cli.Close()
+
+	authConfig := types.AuthConfig{
+		Username:      req.Username,
+		Password:      req.Userpwd,
+		ServerAddress: req.Repository,
+	}
+
+	resp, err := cli.RegistryLogin(context.Background(), authConfig)
+	if err != nil {
+		log.Errorf("login error: %v", err)
+		return err
+	}
+
+	fmt.Println(resp.Status)
+	return nil
+}
+
 func connectTest(cfg *TestRequest) error {
 	client, err := getClient(&serverConfig{
 		IP:       cfg.ServerIP,
@@ -382,6 +416,35 @@ func serveHTTP(addr string) {
 		w.Write(bytes)
 
 		log.Println("POST /api/v1/test 200")
+	})
+
+	http.HandleFunc("/api/v1/registry/test", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "only support POST method", http.StatusForbidden)
+			return
+		}
+
+		// parse post data
+		data := new(TestRegistryRequest)
+		if err := data.Bind(r.Body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if err := registryLoginTest(data); err != nil {
+			log.Errorf("registry login test failed: %v", err)
+			http.Error(w, fmt.Sprintf(`{"status":"failed", "msg": "%s"}`, err.Error()), http.StatusUnauthorized)
+			log.Println("POST /api/v1/registry/test 401")
+			return
+		}
+
+		bytes, _ := json.Marshal(map[string]string{"status": "ok", "msg": ""})
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		w.Write(bytes)
+
+		log.Println("POST /api/v1/registry/test 200")
 	})
 
 	http.HandleFunc("/api/v1/list", func(w http.ResponseWriter, r *http.Request) {
