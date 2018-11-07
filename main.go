@@ -147,7 +147,7 @@ func saveFile(path string, r io.Reader) error {
 	return nil
 }
 
-func Walk(cfg *serverConfig, path string, walkFn func(string) error) (err error) {
+func Walk(cfg *serverConfig, path string, walkFn func(string, time.Time) error) (err error) {
 	var lines []*ftp.Entry
 
 	log.Printf("Walking: '%s'\n", path)
@@ -162,7 +162,7 @@ func Walk(cfg *serverConfig, path string, walkFn func(string) error) (err error)
 				return
 			}
 		case 0:
-			if err = walkFn(filepath.Join(path, line.Name)); err != nil {
+			if err = walkFn(filepath.Join(path, line.Name), line.Time); err != nil {
 				return
 			}
 		}
@@ -466,9 +466,11 @@ func serveHTTP(addr string) {
 		}
 
 		// list files
-		var files []string
-		walkFun := func(file string) error {
-			files = append(files, file)
+		//var files []string
+		files := map[string]time.Time{}
+		walkFun := func(path string, time time.Time) error {
+			//files = append(files, file)
+			files[path] = time
 			return nil
 		}
 
@@ -488,7 +490,8 @@ func serveHTTP(addr string) {
 		md5 := map[string]string{}
 		sha256 := map[string]string{}
 		paths := map[string]string{}
-		for _, file := range files {
+		times := map[string]time.Time{}
+		for file, time := range files {
 			if strings.HasSuffix(file, ".md5") {
 				content, err := readFile(cfg, file)
 				if err != nil {
@@ -499,6 +502,7 @@ func serveHTTP(addr string) {
 				last := strings.Split(file, "/")
 				md5[strings.TrimSuffix(last[len(last)-1], ".md5")] = content
 				paths[strings.TrimSuffix(last[len(last)-1], ".md5")] = filepath.Dir(file)
+				times[strings.TrimSuffix(last[len(last)-1], ".md5")] = time
 			}
 			if strings.HasSuffix(file, ".sha256") {
 				content, err := readFile(cfg, file)
@@ -522,6 +526,7 @@ func serveHTTP(addr string) {
 				ImageTag:           tag,
 				ImageMD5Code:       v,
 				ImageSha256Code:    sha256[k],
+				DataTime:           times[k],
 			}
 			out = append(out, r)
 		}

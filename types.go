@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"io"
+	"time"
 )
 
 type SyncData struct {
@@ -67,11 +68,12 @@ func (ld *ListRequest) Validate() error {
 }
 
 type ListResponse struct {
-	ImageFileDirectory string `json:"imageFileDirectory"`
-	ImageName          string `json:"imageName"`
-	ImageTag           string `json:"imageTag"`
-	ImageMD5Code       string `json:"imageMD5Code"`
-	ImageSha256Code    string `json:"imageSha256Code"`
+	ImageFileDirectory string    `json:"imageFileDirectory"`
+	ImageName          string    `json:"imageName"`
+	ImageTag           string    `json:"imageTag"`
+	ImageMD5Code       string    `json:"imageMD5Code"`
+	ImageSha256Code    string    `json:"imageSha256Code"`
+	DataTime           time.Time `json:"dataTime"`
 }
 
 type TestRegistryRequest struct {
