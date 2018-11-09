@@ -263,9 +263,19 @@ func loadImage(path string) (string, error) {
 		return "", err
 	}
 
-	out := bytes.Trim(bts, "\n")
+	scanner := bufio.NewScanner(bytes.NewReader(bts))
+	scanner.Split(bufio.ScanLines)
+	var data []byte
+	for scanner.Scan() {
+		data = scanner.Bytes()
+	}
+
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("read load image reponse:%v", err)
+	}
+
 	m := map[string]string{}
-	if err := json.Unmarshal(out, &m); err != nil {
+	if err := json.Unmarshal(data, &m); err != nil {
 		log.Errorf("unmarshal err: %v", err)
 		return "", err
 	}
