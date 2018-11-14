@@ -65,12 +65,6 @@ func registryLoginTest(req *TestRegistryRequest) error {
 		return errors.New("empty Repository")
 	}
 
-	//host, port, err := net.SplitHostPort(req.Repository)
-	//if err != nil {
-	//	return fmt.Errorf("Invalid Repository %v", err)
-	//}
-
-	//cli, err := client.NewClient(req.Repository, "", nil, nil)
 	cli, err := client.NewEnvClient()
 	if err != nil {
 		log.Errorf("docker NewClient error: %v", err)
@@ -116,21 +110,10 @@ func connectTest(cfg *TestRequest) error {
 	return nil
 }
 
-func retrFile(path string, config *serverConfig) (*ftp.Response, error) {
+func retrFile(path string, client *ftp.ServerConn) (*ftp.Response, error) {
 	log.Println("Retr file", path)
 
-	client, err := getClient(config)
-	if err != nil {
-		return nil, err
-	}
-	defer client.Quit()
-
-	if err := client.ChangeDir(filepath.Dir(path)); err != nil {
-		log.Errorf("change to dir %s error: %v", filepath.Dir(path), err)
-		return nil, err
-	}
-
-	return client.Retr(filepath.Base(path))
+	return client.Retr(path)
 }
 
 func saveFile(path string, r io.Reader) error {
@@ -147,18 +130,18 @@ func saveFile(path string, r io.Reader) error {
 	return nil
 }
 
-func Walk(cfg *serverConfig, path string, walkFn func(string, time.Time) error) (err error) {
+func Walk(client *ftp.ServerConn, path string, walkFn func(string, time.Time) error) (err error) {
 	var lines []*ftp.Entry
 
 	log.Printf("Walking: '%s'\n", path)
-	if lines, err = listFiles(cfg, path); err != nil {
+	if lines, err = listFiles(client, path); err != nil {
 		return
 	}
 
 	for _, line := range lines {
 		switch line.Type {
 		case 1:
-			if err = Walk(cfg, filepath.Join(path, line.Name), walkFn); err != nil {
+			if err = Walk(client, filepath.Join(path, line.Name), walkFn); err != nil {
 				return
 			}
 		case 0:
@@ -171,14 +154,13 @@ func Walk(cfg *serverConfig, path string, walkFn func(string, time.Time) error) 
 	return
 }
 
-func listFiles(cfg *serverConfig, path string) ([]*ftp.Entry, error) {
+func ftpLogin(cfg *serverConfig) (*ftp.ServerConn, error) {
 	server := fmt.Sprintf("%s:%d", cfg.IP, cfg.Port)
 
 	client, err := ftp.Dial(server)
 	if err != nil {
 		return nil, err
 	}
-	defer client.Quit()
 
 	log.Println("Successfully connected to", server)
 
@@ -188,6 +170,10 @@ func listFiles(cfg *serverConfig, path string) ([]*ftp.Entry, error) {
 
 	log.Println("Successfully login to", server)
 
+	return client, nil
+}
+
+func listFiles(client *ftp.ServerConn, path string) ([]*ftp.Entry, error) {
 	entries, err := client.List(path)
 	if err != nil {
 		log.Println("list error:", err)
@@ -212,20 +198,13 @@ func md5Check(md5Sum string, path string) bool {
 	return hex.EncodeToString(h.Sum(nil)) == md5Sum
 }
 
-func downloadImage(src *ImageSource, image *ImageItem) (string, error) {
-	cfg := &serverConfig{
-		IP:       src.ServerIP,
-		Port:     src.ServerPort,
-		User:     src.Username,
-		Password: src.Userpwd,
-	}
-
+func downloadImage(client *ftp.ServerConn, src *ImageSource, image *ImageItem) (string, error) {
 	fname := image.ImageFileName + "#" + image.ImageTag + ".tar.gz"
 	path := filepath.Join(image.ImageFileDirectory, fname)
 
 	log.Println("download image", path)
 
-	file, err := retrFile(path, cfg)
+	file, err := retrFile(path, client)
 	if err != nil {
 		log.Errorf("Retr file %s error: %v", path, err)
 		return "", err
@@ -350,12 +329,13 @@ func pushImage(username, password, image string) error {
 	return nil
 }
 
-func readFile(cfg *serverConfig, path string) (string, error) {
-	resp, err := retrFile(path, cfg)
+func readFile(client *ftp.ServerConn, path string) (string, error) {
+	resp, err := retrFile(path, client)
 	if err != nil {
 		log.Errorf("retr file error: %v", err)
 		return "", err
 	}
+	defer resp.Close()
 
 	body, err := ioutil.ReadAll(resp)
 	if err != nil {
@@ -491,7 +471,15 @@ func serveHTTP(addr string) {
 			Password: data.Userpwd,
 		}
 
-		if err := Walk(cfg, data.SyncDirectory, walkFun); err != nil {
+		client, err := ftpLogin(cfg)
+		if err != nil {
+			log.Errorf("ftp login %v", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer client.Quit()
+
+		if err := Walk(client, data.SyncDirectory, walkFun); err != nil {
 			log.Errorf("list files error: %v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -503,8 +491,9 @@ func serveHTTP(addr string) {
 		times := map[string]time.Time{}
 		for file, time := range files {
 			if strings.HasSuffix(file, ".md5") {
-				content, err := readFile(cfg, file)
+				content, err := readFile(client, file)
 				if err != nil {
+					//if err != nil && !strings.Contains(err.Error(), "226") && !strings.Contains(err.Error(), "229") && !strings.Contains(err.Error(), "227") && !strings.Contains(err.Error(), "250") {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
@@ -515,8 +504,9 @@ func serveHTTP(addr string) {
 				times[strings.TrimSuffix(last[len(last)-1], ".md5")] = time
 			}
 			if strings.HasSuffix(file, ".sha256") {
-				content, err := readFile(cfg, file)
+				content, err := readFile(client, file)
 				if err != nil {
+					//if err != nil && !strings.Contains(err.Error(), "226") && !strings.Contains(err.Error(), "229") && !strings.Contains(err.Error(), "227") && !strings.Contains(err.Error(), "250") {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
@@ -569,6 +559,19 @@ func serveHTTP(addr string) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		cfg := &serverConfig{
+			IP:       data.ImageSource.ServerIP,
+			Port:     data.ImageSource.ServerPort,
+			User:     data.ImageSource.Username,
+			Password: data.ImageSource.Userpwd,
+		}
+
+		client, err := ftpLogin(cfg)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		defer client.Quit()
 
 		var out []*SyncResponse
 		var wg sync.WaitGroup
@@ -578,7 +581,7 @@ func serveHTTP(addr string) {
 				defer wg.Done()
 
 				log.Println("download image", image.ImageFileName)
-				path, err := downloadImage(data.ImageSource, image)
+				path, err := downloadImage(client, data.ImageSource, image)
 				if err != nil {
 					log.Errorf("download image %s from ftp %v", image.ImageFileName, err)
 
