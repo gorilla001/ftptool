@@ -141,6 +141,10 @@ func Walk(client *ftp.ServerConn, path string, walkFn func(string, time.Time) er
 	for _, line := range lines {
 		switch line.Type {
 		case 1:
+			if line.Name == "." || line.Name == ".." {
+				continue
+			}
+
 			if err = Walk(client, filepath.Join(path, line.Name), walkFn); err != nil {
 				return
 			}
